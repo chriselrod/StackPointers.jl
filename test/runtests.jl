@@ -1,6 +1,6 @@
-using StackPointer
+using StackPointers
 using Test
 
-@testset "StackPointer.jl" begin
+@testset "StackPointers.jl" begin
     # Write your own tests here.
 end

@@ -1,7 +1,11 @@
-name = "StackPointer"
+name = "StackPointers"
 uuid = "062a3e2c-34b1-4659-9cae-7af421e0d832"
 authors = ["Chris Elrod <elrodc@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+VectorizationBase = "3d5dd08c-fd9d-11e8-17fa-ed2836048c2f"
 
 [compat]
 julia = "1"
