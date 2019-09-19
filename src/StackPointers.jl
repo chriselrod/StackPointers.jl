@@ -1,7 +1,7 @@
 module StackPointers
 
 using VectorizationBase
-using MacroTools: @capture
+using MacroTools: @capture, postwalk
 
 export StackPointer, @def_stackpointer_fallback, @add_stackpointer_method
 
