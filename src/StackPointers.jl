@@ -83,7 +83,7 @@ end
 
 
 
-function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool = false)
+function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool = false, m = :StackPointers)
     if blacklist == nothing
         whitelist = STACK_POINTER_SUPPORTED_METHODS
     else
@@ -102,7 +102,7 @@ function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool =
                     push!(q.args, :(@show $arg))
                 end
                 push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
-                push!(q.args, :(($stacksym, $B) = $mod.$func($stacksym::StackPointers.StackPointer, $(args...))))
+                push!(q.args, :(($stacksym, $B) = $mod.$func($stacksym::($m.StackPointer), $(args...))))
                 push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
                 push!(q.args, :(println("Result: ")))
                 push!(q.args, :(@show $B))
@@ -122,7 +122,7 @@ function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool =
                     push!(q.args, :(@show $arg))
                 end
                 push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
-                push!(q.args, :(($stacksym, $B) = $func($stacksym::StackPointers.StackPointer, $(args...))))
+                push!(q.args, :(($stacksym, $B) = $func($stacksym::($m.StackPointer), $(args...))))
                 push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
                 push!(q.args, :(println("Result: ")))
                 push!(q.args, :(@show $B))
@@ -144,7 +144,7 @@ function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool =
                     push!(q.args, :(@show $arg))
                 end
                 push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
-                push!(q.args, :(($stacksym, $B) = $mod.$func{$(T...)}($stacksym::StackPointers.StackPointer, $(args...))))
+                push!(q.args, :(($stacksym, $B) = $mod.$func{$(T...)}($stacksym::($m.StackPointer), $(args...))))
                 push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
                 push!(q.args, :(println("Result: ")))
                 push!(q.args, :(@show $B))
@@ -163,7 +163,7 @@ function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool =
                     push!(q.args, :(@show $arg))
                 end
                 push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
-                push!(q.args, :(($stacksym, $B) = $func{$(T...)}($stacksym::StackPointers.StackPointer, $(args...))))
+                push!(q.args, :(($stacksym, $B) = $func{$(T...)}($stacksym::($m.StackPointer), $(args...))))
                 push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
                 push!(q.args, :(println("Result: ")))
                 push!(q.args, :(@show $B))
