@@ -3,7 +3,7 @@ module StackPointers
 using VectorizationBase
 using MacroTools: @capture, postwalk
 
-export StackPointer, @def_stackpointer_fallback, @add_stackpointer_method
+export StackPointer, @def_stackpointer_fallback, @add_stackpointer_method, stack_pointer_call
 
 struct StackPointer
     ptr::Ptr{Cvoid}
@@ -26,6 +26,12 @@ end
 
 VectorizationBase.align(s::StackPointer) = StackPointer(VectorizationBase.align(s.ptr))
 
+supports_stack_pointer(f) = false
+function stack_pointer_call(sp::StackPointer, f::F, args...) where {F}
+    supports_stack_pointer(f) ? f(sp, args...) : (sp, f(args...))
+end
+
+
 # (Module, function) pairs supported by StackPointer.
 #const STACK_POINTER_SUPPORTED_MODMETHODS = Set{Tuple{Symbol,Symbol}}()
 const STACK_POINTER_SUPPORTED_METHODS = Set{Symbol}()
@@ -35,6 +41,7 @@ macro support_stack_pointer(mod, func)
 #        push!(StackPointers.STACK_POINTER_SUPPORTED_MODMETHODS, ($(QuoteNode(mod)),$(QuoteNode(func))))
         push!(StackPointers.STACK_POINTER_SUPPORTED_METHODS, $(QuoteNode(func)))
         @inline $mod.$func(sp::StackPointers.StackPointer, args...) = (sp, $mod.$func(args...))
+        StackPointers.supports_stack_pointer(::typeof($mod.$func)) = true
     end)
 end
 macro support_stack_pointer(func)
@@ -43,12 +50,24 @@ macro support_stack_pointer(func)
 #        push!(StackPointers.STACK_POINTER_SUPPORTED_MODMETHODS, ($(QuoteNode(mod)),$(QuoteNode(func))))
         push!(StackPointers.STACK_POINTER_SUPPORTED_METHODS, $(QuoteNode(func)))
         @inline $func(sp::StackPointers.StackPointer, args...) = (sp, $func(args...))
+        if $func isa Function
+        StackPointers.supports_stack_pointer(::typeof($func)) = true
+        else
+        StackPointers.supports_stack_pointer(::Type{<:$func}) = true
+        end
     end)
 end
 macro def_stackpointer_fallback(funcs...)
     q = quote end
     for func ∈ funcs
         push!(q.args, :(@inline $func(sp::StackPointers.StackPointer, args...) = (sp, $func(args...))))
+        push!(q.args, quote
+              if $func isa Function
+              StackPointers.supports_stack_pointer(::typeof($func)) = true
+              else
+              StackPointers.supports_stack_pointer(::Type{<:$func}) = true
+              end
+              end)
     end
     esc(q)
 end
