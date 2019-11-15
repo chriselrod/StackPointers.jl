@@ -5,11 +5,12 @@ using MacroTools: @capture, postwalk
 
 export StackPointer, @def_stackpointer_fallback, @add_stackpointer_method, @def_stackpointer_noalloc, @add_stackpointer_noalloc, stack_pointer_call
 
-struct StackPointer
-    ptr::Ptr{Cvoid}
+struct StackPointer # default to Float64
+    ptr::Ptr{Float64}
 end
 @inline Base.pointer(s::StackPointer) = s.ptr
 @inline Base.pointer(s::StackPointer, ::Type{T}) where {T} = Base.unsafe_convert(Ptr{T}, s.ptr)
+@inline Base.pointer(s::StackPointer, ::Type{Float64}) = s.ptr
 # @inline Base.pointer(s::StackPointer, ::Type{T}) where {T} = reinterpret(Ptr{T}, s.ptr)
 
 @inline Base.convert(::Type{Ptr{T}}, s::StackPointer) where {T} = pointer(s, T)
