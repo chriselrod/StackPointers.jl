@@ -9,8 +9,8 @@ struct StackPointer
     ptr::Ptr{Cvoid}
 end
 @inline Base.pointer(s::StackPointer) = s.ptr
-#@inline Base.pointer(s::StackPointer, ::Type{T}) where {T} = Base.unsafe_convert(Ptr{T}, s.ptr)
-@inline Base.pointer(s::StackPointer, ::Type{T}) where {T} = reinterpret(Ptr{T}, s.ptr)
+@inline Base.pointer(s::StackPointer, ::Type{T}) where {T} = Base.unsafe_convert(Ptr{T}, s.ptr)
+# @inline Base.pointer(s::StackPointer, ::Type{T}) where {T} = reinterpret(Ptr{T}, s.ptr)
 
 @inline Base.convert(::Type{Ptr{T}}, s::StackPointer) where {T} = pointer(s, T)
 @inline Base.unsafe_convert(::Type{Ptr{T}}, s::StackPointer) where {T} = pointer(s, T)
