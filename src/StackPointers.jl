@@ -234,5 +234,12 @@ function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool =
     end
 end
 
+include("precompile.jl")
+_precompile_()
+
+function __init__()
+    _precompile_()
+end
+
 
 end # module
