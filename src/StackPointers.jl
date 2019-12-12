@@ -1,7 +1,7 @@
 module StackPointers
 
 using VectorizationBase
-using MacroTools: @capture, postwalk
+using MacroTools: postwalk
 
 export StackPointer, @def_stackpointer_fallback, @add_stackpointer_method, @def_stackpointer_noalloc, @add_stackpointer_noalloc, stack_pointer_call
 
@@ -139,6 +139,14 @@ end
 #@support_stack_pointer ∂muladd
 
 
+function extract_func_sym(f::Expr)::Symbol
+    if f.head === :(.)
+        f.args[2].value
+    elseif f.head === :curly
+        ff = first(f.args)
+        ff isa Symbol ? ff : ff.args[2].value
+    end
+end
 
 function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool = false, m = :StackPointers)
     whitelist = union(STACK_POINTER_NOALLOC_METHODS, STACK_POINTER_SUPPORTED_METHODS)
@@ -148,89 +156,32 @@ function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool =
         whitelist = setdiff(whitelist, blacklist)
     end
     postwalk(expr) do ex
-        if @capture(ex, B_ = mod_.func_(args__)) && func ∈ whitelist
-            ret = func ∈ STACK_POINTER_NOALLOC_METHODS ? B : Expr(:tuple, stacksym, B)
-            if verbose
-                str = "Args: $args; output: $B"
-                q = quote
-                    println($(string(func)))
-                    println($str)
-                end
-                for arg in args
-                    push!(q.args, :(@show $arg))
-                end
-                push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
-                push!(q.args, :($ret = $mod.$func($stacksym::($m.StackPointer), $(args...))))
-                push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
-                push!(q.args, :(println("Result: ")))
-                push!(q.args, :(@show $B))
-                return q
-            else
-                return :($ret = $mod.$func($stacksym, $(args...)))
-            end
-        elseif @capture(ex, B_ = func_(args__)) && func ∈ whitelist
-            ret = func ∈ STACK_POINTER_NOALLOC_METHODS ? B : Expr(:tuple, stacksym, B)
-            if verbose
-                str = "Args: $args; output: $B"
-                q = quote
-                    println($(string(func)))
-                    println($str)
-                end
-                for arg in args
-                    push!(q.args, :(@show $arg))
-                end
-                push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
-                push!(q.args, :($ret = $func($stacksym::($m.StackPointer), $(args...))))
-                push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
-                push!(q.args, :(println("Result: ")))
-                push!(q.args, :(@show $B))
-                return q
-            else
-                return :($ret = $func($stacksym, $(args...)))
-            end
-        elseif @capture(ex, B_ = mod_.func_{T__}(args__)) && func ∈ whitelist
-            ret = func ∈ STACK_POINTER_NOALLOC_METHODS ? B : Expr(:tuple, stacksym, B)
-            if verbose
-                str = "Args: $args; output: $B"
-                q = quote
-                    println($(string(func)))
-                    println($str)
-                end
-                for arg in args
-                    push!(q.args, :(@show $arg))
-                end
-                push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
-                push!(q.args, :($ret = $mod.$func{$(T...)}($stacksym::($m.StackPointer), $(args...))))
-                push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
-                push!(q.args, :(println("Result: ")))
-                push!(q.args, :(@show $B))
-                return q
-            else
-                return :($ret = $mod.$func{$(T...)}($stacksym, $(args...)))
-            end
-        elseif @capture(ex, B_ = func_{T__}(args__)) && func ∈ whitelist
-            ret = func ∈ STACK_POINTER_NOALLOC_METHODS ? B : Expr(:tuple, stacksym, B)
-            if verbose
-                str = "Args: $args; output: $B"
-                q = quote
-                    println($(string(func)))
-                    println($str)
-                end
-                for arg in args
-                    push!(q.args, :(@show $arg))
-                end
-                push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
-                push!(q.args, :($ret = $func{$(T...)}($stacksym::($m.StackPointer), $(args...))))
-                push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
-                push!(q.args, :(println("Result: ")))
-                push!(q.args, :(@show $B))
-                return q
-            else
-                return :($ret = $func{$(T...)}($stacksym, $(args...)))
-            end
-        else
-            return ex
+        (ex isa Expr && ex.head === :(=)) || return ex
+        B = ex.args[1]
+        RHS = ex.args[2]
+        (RHS isa Expr && RHS.head === :call) || return ex
+        f = first(RHS.args)
+        func::Symbol = f isa Symbol ? f : extract_func_sym(f)
+        func ∈ whitelist || return ex
+        ret = func ∈ STACK_POINTER_NOALLOC_METHODS ? B : Expr(:tuple, stacksym, B)
+        fcall = Expr(:call, f, stacksym)
+        append!(fcall.args, @view(RHS.args[2:end]))
+        retexpr = Expr(:(=), ret, fcall)
+        verbose || return retexpr
+        str = "Args: $args; output: $B"
+        q = quote
+            println($(string(func)))
+            println($str)
         end
+        for arg in args
+            push!(q.args, :(@show $arg))
+        end
+        push!(q.args, :(@show typeof.($(Expr(:tuple,args...)))))
+        push!(q.args, retexpr)#:($ret = $f($stacksym::($m.StackPointer), $(args...))))
+        push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
+        push!(q.args, :(println("Result: ")))
+        push!(q.args, :(@show $B))
+        return q
     end
 end
 
