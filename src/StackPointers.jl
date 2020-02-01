@@ -1,6 +1,7 @@
 module StackPointers
 
 using VectorizationBase
+using VectorizationBase: gep
 using MacroTools: postwalk
 
 export StackPointer, @def_stackpointer_fallback, @add_stackpointer_method, @def_stackpointer_noalloc, @add_stackpointer_noalloc, stack_pointer_call
@@ -21,9 +22,10 @@ end
 #@inline Base.:+(sp::StackPointer, i::Integer) = StackPointer(sp.ptr + i + SPO[])
 #@inline Base.:+(i::Integer, sp::StackPointer) = StackPointer(sp.ptr + i + SPO[])
 
-@inline Base.:+(sp::StackPointer, i::Integer...) = StackPointer(+(sp.ptr, i...))
-@inline Base.:+(i::Integer, sp::StackPointer) = StackPointer(sp.ptr + i)
-@inline Base.:-(sp::StackPointer, i::Integer...) = StackPointer(-(sp.ptr, i...))
+@inline Base.:+(sp::StackPointer, i::Integer) = StackPointer(gep(sp.ptr, i))
+@inline Base.:+(sp::StackPointer, i::Integer...) = StackPointer(gep(sp.ptr, +(i...)))
+@inline Base.:+(i::Integer, sp::StackPointer) = StackPointer(gep(sp.ptr, i))
+@inline Base.:-(sp::StackPointer, i::Integer) = StackPointer(gep(sp.ptr, -i))
 
 VectorizationBase.align(s::StackPointer) = StackPointer(VectorizationBase.align(s.ptr))
 
