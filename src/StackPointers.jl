@@ -2,7 +2,6 @@ module StackPointers
 
 using VectorizationBase
 using VectorizationBase: gep
-using MacroTools: postwalk
 
 export StackPointer, @def_stackpointer_fallback, @add_stackpointer_method, @def_stackpointer_noalloc, @add_stackpointer_noalloc, stack_pointer_call
 
@@ -150,26 +149,32 @@ function extract_func_sym(f::Expr)::Symbol
     end
 end
 
-function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool = false, m = :StackPointers)
+function stack_pointer_pass!(expr, stacksym, blacklist = nothing, verbose::Bool = false, m = :StackPointers)
     whitelist = union(STACK_POINTER_NOALLOC_METHODS, STACK_POINTER_SUPPORTED_METHODS)
     if blacklist == nothing
         whitelist = whitelist
     else
         whitelist = setdiff(whitelist, blacklist)
     end
-    postwalk(expr) do ex
-        (ex isa Expr && ex.head === :(=)) || return ex
+    for (i,ex) ∈ enumerate(expr.args)
+        ex isa Expr || continue
+        if ex.head === :block
+            stack_pointer_pass!(ex, stacksym, blacklist, verbose, m)
+            continue
+        end
+        ex.head === :(=) || continue
         B = ex.args[1]
         RHS = ex.args[2]
-        (RHS isa Expr && RHS.head === :call) || return ex
+        (RHS isa Expr && RHS.head === :call) || continue
         f = first(RHS.args)
         func::Symbol = f isa Symbol ? f : extract_func_sym(f)
-        func ∈ whitelist || return ex
+        func ∈ whitelist || continue
         ret = func ∈ STACK_POINTER_NOALLOC_METHODS ? B : Expr(:tuple, stacksym, B)
         fcall = Expr(:call, f, stacksym)
         append!(fcall.args, @view(RHS.args[2:end]))
         retexpr = Expr(:(=), ret, fcall)
-        verbose || return retexpr
+        expr.args[i] = retexpr
+        verbose || continue
         str = "Args: $args; output: $B"
         q = quote
             println($(string(func)))
@@ -183,7 +188,7 @@ function stack_pointer_pass(expr, stacksym, blacklist = nothing, verbose::Bool =
         push!(q.args, :(@show divrem(reinterpret(Int, pointer($stacksym)), $(VectorizationBase.REGISTER_SIZE))))
         push!(q.args, :(println("Result: ")))
         push!(q.args, :(@show $B))
-        return q
+        expr.args[i] = q
     end
 end
 
