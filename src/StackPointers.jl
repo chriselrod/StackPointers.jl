@@ -11,15 +11,9 @@ end
 @inline Base.pointer(s::StackPointer) = s.ptr
 @inline Base.pointer(s::StackPointer, ::Type{T}) where {T} = Base.unsafe_convert(Ptr{T}, s.ptr)
 @inline Base.pointer(s::StackPointer, ::Type{Float64}) = s.ptr
-# @inline Base.pointer(s::StackPointer, ::Type{T}) where {T} = reinterpret(Ptr{T}, s.ptr)
 
 @inline Base.convert(::Type{Ptr{T}}, s::StackPointer) where {T} = pointer(s, T)
 @inline Base.unsafe_convert(::Type{Ptr{T}}, s::StackPointer) where {T} = pointer(s, T)
-
-# These are for "fuzzing" offsets; answers shouldn't change for SPO ≥ 0, so if they do, there's a bug!
-#const SPO = Ref{Int}(800);
-#@inline Base.:+(sp::StackPointer, i::Integer) = StackPointer(sp.ptr + i + SPO[])
-#@inline Base.:+(i::Integer, sp::StackPointer) = StackPointer(sp.ptr + i + SPO[])
 
 @inline Base.:+(sp::StackPointer, i::Integer) = StackPointer(gep(sp.ptr, i))
 @inline Base.:+(sp::StackPointer, i::Integer...) = StackPointer(gep(sp.ptr, +(i...)))
@@ -27,12 +21,6 @@ end
 @inline Base.:-(sp::StackPointer, i::Integer) = StackPointer(gep(sp.ptr, -i))
 
 VectorizationBase.align(s::StackPointer) = StackPointer(VectorizationBase.align(s.ptr))
-
-# @enum StackPointerSupport::Int8 begin
-#     allocate_and_return
-#     temporyary_nu
-#     None
-# end
 
 accepts_stack_pointer(f) = false
 returns_stack_pointer(f) = false
@@ -42,13 +30,11 @@ end
 
 
 # (Module, function) pairs supported by StackPointer.
-#const STACK_POINTER_SUPPORTED_MODMETHODS = Set{Tuple{Symbol,Symbol}}()
 const STACK_POINTER_SUPPORTED_METHODS = Set{Symbol}()
 const STACK_POINTER_NOALLOC_METHODS = Set{Symbol}()
 
 macro support_stack_pointer(mod, func)
     esc(quote
-#        push!(StackPointers.STACK_POINTER_SUPPORTED_MODMETHODS, ($(QuoteNode(mod)),$(QuoteNode(func))))
         push!(StackPointers.STACK_POINTER_SUPPORTED_METHODS, $(QuoteNode(func)))
         @inline $mod.$func(sp::StackPointers.StackPointer, args...) = (sp, $mod.$func(args...))
         StackPointers.accepts_stack_pointer(::typeof($mod.$func)) = true
@@ -119,10 +105,6 @@ macro add_stackpointer_noalloc(funcs...)
     esc(q)    
 end
 
-#function ∂mul end
-#function ∂add end
-#function ∂muladd end
-
 @support_stack_pointer Base getindex
 @support_stack_pointer Base.Broadcast materialize
 @support_stack_pointer Base (*)
@@ -130,14 +112,6 @@ end
 @support_stack_pointer Base (-)
 @support_stack_pointer Base similar
 @support_stack_pointer Base copy
-
-#@support_stack_pointer SIMDPirates vmul
-#@support_stack_pointer SIMDPirates vadd
-#@support_stack_pointer SIMDPirates vsub
-
-#@support_stack_pointer ∂mul
-#@support_stack_pointer ∂add
-#@support_stack_pointer ∂muladd
 
 
 function extract_func_sym(f::Expr)::Symbol
