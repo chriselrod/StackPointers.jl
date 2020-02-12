@@ -3,7 +3,7 @@ module StackPointers
 using VectorizationBase
 using VectorizationBase: gep
 
-export StackPointer, @def_stackpointer_fallback, @add_stackpointer_method, @def_stackpointer_noalloc, @add_stackpointer_noalloc, stack_pointer_call
+export StackPointer, stack_pointer_call
 
 struct StackPointer # default to Float64
     ptr::Ptr{Float64}
@@ -20,98 +20,20 @@ end
 @inline Base.:+(i::Integer, sp::StackPointer) = StackPointer(gep(sp.ptr, i))
 @inline Base.:-(sp::StackPointer, i::Integer) = StackPointer(gep(sp.ptr, -i))
 
-VectorizationBase.align(s::StackPointer) = StackPointer(VectorizationBase.align(s.ptr))
-
-accepts_stack_pointer(f) = false
-returns_stack_pointer(f) = false
-function stack_pointer_call(sp::StackPointer, f::F, args...) where {F}
-    accepts_stack_pointer(f) ? (returns_stack_pointer(f) ? f(sp, args...) : (sp, f(sp, args...))) : (sp, f(args...))
-end
+@inline VectorizationBase.align(s::StackPointer) = StackPointer(VectorizationBase.align(s.ptr))
 
 
-# (Module, function) pairs supported by StackPointer.
-const STACK_POINTER_SUPPORTED_METHODS = Set{Symbol}()
-const STACK_POINTER_NOALLOC_METHODS = Set{Symbol}()
+"""
+To support using StackPointers, overload stack_pointer_call.
+For example, in PaddedMatrices (which defines an appropriate `similar` method):
 
-macro support_stack_pointer(mod, func)
-    esc(quote
-        push!(StackPointers.STACK_POINTER_SUPPORTED_METHODS, $(QuoteNode(func)))
-        @inline $mod.$func(sp::StackPointers.StackPointer, args...) = (sp, $mod.$func(args...))
-        StackPointers.accepts_stack_pointer(::typeof($mod.$func)) = true
-        StackPointers.returns_stack_pointer(::typeof($mod.$func)) = true
-    end)
-end
-macro support_stack_pointer(func)
-    # Could use @__MODULE__
-    expr = quote
-        push!(StackPointers.STACK_POINTER_SUPPORTED_METHODS, $(QuoteNode(func)))
-        @inline $func(sp::StackPointers.StackPointer, args...) = (sp, $func(args...))
-        if $func isa Function
-            StackPointers.accepts_stack_pointer(::typeof($func)) = true
-            StackPointers.returns_stack_pointer(::typeof($func)) = true
-        else
-            StackPointers.accepts_stack_pointer(::Type{<:$func}) = true
-            StackPointers.returns_stack_pointer(::Type{<:$func}) = true
-        end
-    end
-    esc(expr)
-end
-macro def_stackpointer_fallback(funcs...)
-    q = quote end
-    for func ∈ funcs
-        push!(q.args, :(@inline $func(sp::StackPointers.StackPointer, args...) = (sp, $func(args...))))
-        func_defs = quote
-            if $func isa Function
-                StackPointers.accepts_stack_pointer(::typeof($func)) = true
-                StackPointers.returns_stack_pointer(::typeof($func)) = true
-            else
-                StackPointers.accepts_stack_pointer(::Type{<:$func}) = true
-                StackPointers.returns_stack_pointer(::Type{<:$func}) = true
-            end
-        end
-        push!(q.args, func_defs)
-    end
-    esc(q)
-end
-macro add_stackpointer_method(funcs...)
-    q = quote
-        for func ∈ $funcs
-            push!(StackPointers.STACK_POINTER_SUPPORTED_METHODS, func)
-        end
-    end
-    esc(q)
-end
-macro def_stackpointer_noalloc(funcs...)
-    q = quote end
-    for func ∈ funcs
-        push!(q.args, :(@inline $func(sp::StackPointers.StackPointer, args...) = ($func(args...))))
-        func_defs = quote
-            if $func isa Function
-                StackPointers.accepts_stack_pointer(::typeof($func)) = true
-            else
-                StackPointers.accepts_stack_pointer(::Type{<:$func}) = true
-            end
-        end
-        push!(q.args, func_defs)
-    end
-    esc(q)
-end
-macro add_stackpointer_noalloc(funcs...)
-    q = quote
-        for func ∈ $funcs
-            push!(StackPointers.STACK_POINTER_NOALLOC_METHODS, func)
-        end
-    end
-    esc(q)    
+@inline function StackPointers.stack_pointer_call(::typeof(*), sp::StackPointer, A::AbstractMatrix, B::AbstractVecOrMat)
+    (sp, C) = similar(sp, A, B)
+    sp, mul!(C, A, B)
 end
 
-@support_stack_pointer Base getindex
-@support_stack_pointer Base.Broadcast materialize
-@support_stack_pointer Base (*)
-@support_stack_pointer Base (+)
-@support_stack_pointer Base (-)
-@support_stack_pointer Base similar
-@support_stack_pointer Base copy
+"""
+@inline stack_pointer_call(f::F, sp::StackPointer, args...) where {F} = (sp, f(args...))
 
 
 function extract_func_sym(f::Expr)::Symbol
