@@ -1,6 +1,6 @@
 module StackPointers
 
-using VectorizationBase: gep
+using VectorizationBase
 
 export StackPointer, stack_pointer_call
 
