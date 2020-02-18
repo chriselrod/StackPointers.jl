@@ -32,7 +32,7 @@ For example, in PaddedMatrices (which defines an appropriate `similar` method):
 end
 
 """
-@inline stack_pointer_call(f::F, sp::StackPointer, args...) where {F} = (sp, f(args...))
+@inline stack_pointer_call(f::F, sp::StackPointer, args::Vararg{<:Any,N}) where {F,N} = (sp, f(args...))
 
 # function extract_func_sym(f::Expr)::Symbol
 #     if f.head === :(.)
