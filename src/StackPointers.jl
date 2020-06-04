@@ -43,7 +43,7 @@ end
 #     end
 # end
 
-include("precompile.jl")
-_precompile_()
+# include("precompile.jl")
+# _precompile_()
 
 end # module
